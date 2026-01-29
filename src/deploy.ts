@@ -89,6 +89,7 @@ export async function deployStack({
     core.info(
       `Обновление стека... Id: ${existingStack.Id} EndpointId: ${existingStack.EndpointId}`
     )
+    core.info(`Параметры обновления: prune=${prune || false}, pullImage=${pullImage || false}`)
     await portainerApi.updateStack(
       existingStack.Id,
       {

@@ -68,7 +68,7 @@ name: Сборка и деплой
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize]  # reopened убран чтобы избежать лишних запусков
     branches:
       - dev   # ← срабатывает когда PR создан В dev
       - main  # ← срабатывает когда PR создан В main
@@ -431,6 +431,24 @@ git push origin v1 -f # Перезаписать удалённый v1
 
 Пользователи с `@v1` автоматически получат обновления `v1.x.x` без изменения workflow.
 
+## Почему workflow запускается дважды?
+
+**Проблема:** При мердже одного PR, другой открытый PR тоже запускает workflow.
+
+**Причина:** После мерджа PR в `dev`/`main`, GitHub автоматически обновляет другие открытые PR в ту же ветку, что вызывает событие `synchronize`.
+
+**Решение (уже в шаблоне):**
+
+1. Убран `reopened` из триггеров - он срабатывает редко
+2. Добавлена проверка автообновлений от GitHub Actions bot
+3. Workflow пропускается если это только обновление базовой ветки
+
+Это нормальное поведение GitHub - workflow запускается чтобы проверить что PR всё ещё совместим с обновлённой базовой веткой.
+
+**Отключить автообновление PR:**
+
+Settings → General → Pull Requests → снять галочку "Always suggest updating pull request branches"
+
 ## Отладка
 
 ### ❌ Error: Input required and not supplied: portainer-host
@@ -461,6 +479,23 @@ git push origin v1 -f # Перезаписать удалённый v1
 
 **Решение:** Обновите action до версии `@v1` (исправлено в v1.0.0)
 
+### ❌ Error: yaml: line X: mapping values are not allowed in this context
+
+**Причина:** Некорректная замена образа в docker-compose.yml с кавычками.
+
+**Решение:** Обновите action до версии `@v1` (исправлено в v1.0.0)
+
+Теперь поддерживаются оба формата:
+```yaml
+# С кавычками - OK
+image: "ghcr.io/username/repo:latest"
+
+# Без кавычек - OK
+image: ghcr.io/username/repo:latest
+```
+
+**Примечание:** `version: '3.8'` deprecated в Docker Compose v2. Можно убрать из файла.
+
 ### Workflow не запускается
 - Проверьте что PR создан в ветку `dev` или `main`
 - Проверьте наличие файла `.github/workflows/deploy.yml`
@@ -477,6 +512,53 @@ git push origin v1 -f # Перезаписать удалённый v1
 ### Образ не обновляется
 - Используйте `pullImage: true`
 - Проверьте права доступа Portainer к registry
+
+### API ключ должен иметь права администратора
+- Portainer → User settings → Access tokens
+- При создании токена убедитесь что у пользователя роль **Administrator**
+
+## Очистка старых образов
+
+**Важно:** Portainer не удаляет старые образы автоматически! Они накапливаются на диске.
+
+### Ручная очистка
+
+SSH на Docker хост:
+
+```bash
+# Удалить dangling образы (без тегов)
+docker image prune -f
+
+# Удалить неиспользуемые образы старше 7 дней
+docker image prune -a -f --filter "until=168h"
+
+# Полная очистка всего неиспользуемого
+docker system prune -a -f
+```
+
+### Автоматическая очистка (рекомендуется)
+
+Создайте cron job на Docker хосте:
+
+```bash
+# Открыть crontab
+crontab -e
+
+# Добавить (запуск каждое воскресенье в 3:00)
+0 3 * * 0 docker image prune -a -f --filter "until=168h"
+```
+
+Это удалит образы старше 7 дней (168 часов).
+
+### Мониторинг места на диске
+
+```bash
+# Проверить занятое место Docker
+docker system df
+
+# Подробная информация
+docker system df -v
+```
 
 ## Лицензия
 

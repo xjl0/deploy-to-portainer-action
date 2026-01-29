@@ -40154,6 +40154,7 @@ async function deployStack({
     info(
       `\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0441\u0442\u0435\u043A\u0430... Id: ${existingStack.Id} EndpointId: ${existingStack.EndpointId}`
     );
+    info(`\u041F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u044B \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: prune=${prune || false}, pullImage=${pullImage || false}`);
     await portainerApi.updateStack(
       existingStack.Id,
       {

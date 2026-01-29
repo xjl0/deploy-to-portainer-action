@@ -5,7 +5,7 @@ name: Сборка и развертывание через Pull Request
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize]  # reopened убран чтобы избежать лишних запусков
     branches:
       - dev   # staging/test окружение
       - main  # production окружение
@@ -22,8 +22,30 @@ jobs:
       pull-requests: write
 
     steps:
+      # 0. Пропускаем workflow если это только обновление базовой ветки без новых изменений
+      - name: Проверка необходимости запуска
+        id: check
+        run: |
+          # Если последний коммит - это merge commit от GitHub, пропускаем
+          COMMIT_MESSAGE="${{ github.event.pull_request.head.sha }}"
+          echo "Последний коммит: $COMMIT_MESSAGE"
+          
+          # Получаем автора последнего коммита
+          AUTHOR="${{ github.event.pull_request.head.user.login }}"
+          echo "Автор коммита: $AUTHOR"
+          
+          # Пропускаем если это auto-merge от GitHub
+          if [[ "${{ github.event.action }}" == "synchronize" && "$AUTHOR" == "github-actions[bot]" ]]; then
+            echo "⏭️  Пропуск: автообновление от GitHub Actions"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Продолжаем: это реальное изменение"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       # 1. Определяем окружение на основе целевой ветки
       - name: Определение окружения
+        if: steps.check.outputs.skip != 'true'
         id: env
         run: |
           echo "🔍 Целевая ветка PR (base_ref): ${{ github.base_ref }}"
@@ -65,16 +87,19 @@ jobs:
 
       # 2. Получение кода
       - name: Получение кода
+        if: steps.check.outputs.skip != 'true'
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
       # 3. Настройка Docker Buildx
       - name: Настройка Docker Buildx
+        if: steps.check.outputs.skip != 'true'
         uses: docker/setup-buildx-action@v3
 
       # 4. Вход в Container Registry
       - name: Вход в GitHub Container Registry
+        if: steps.check.outputs.skip != 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -83,6 +108,7 @@ jobs:
 
       # 5. Сборка и отправка Docker образа
       - name: Сборка и отправка образа
+        if: steps.check.outputs.skip != 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -101,6 +127,7 @@ jobs:
 
       # 6. Развертывание в Portainer
       - name: Развертывание в Portainer (${{ steps.env.outputs.environment }})
+        if: steps.check.outputs.skip != 'true'
         uses: xjl0/deploy-to-portainer-action@v1
         with:
           portainer-host: ${{ steps.env.outputs.portainer_host }}
@@ -115,7 +142,7 @@ jobs:
       # 7. Комментарий в PR с информацией о деплое
       - name: Добавление комментария в PR
         uses: actions/github-script@v7
-        if: success()
+        if: steps.check.outputs.skip != 'true' && success()
         with:
           script: |
             const output = `### ✅ Развертывание успешно завершено
@@ -138,7 +165,7 @@ jobs:
       # 8. Комментарий в PR при ошибке
       - name: Комментарий об ошибке
         uses: actions/github-script@v7
-        if: failure()
+        if: steps.check.outputs.skip != 'true' && failure()
         with:
           script: |
             const output = `### ⛔️ Ошибка развертывания
