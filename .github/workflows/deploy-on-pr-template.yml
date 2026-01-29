@@ -12,7 +12,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-deploy:
@@ -27,6 +26,10 @@ jobs:
       - name: Определение окружения
         id: env
         run: |
+          # Преобразуем имя репозитория в lowercase для Docker (ghcr.io требует lowercase)
+          IMAGE_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          
           if [ "${{ github.base_ref }}" == "dev" ]; then
             echo "environment=staging" >> $GITHUB_OUTPUT
             echo "env_type=staging" >> $GITHUB_OUTPUT
@@ -76,8 +79,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.image_tag }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.base_ref }}-latest
+            ${{ env.REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ steps.env.outputs.image_tag }}
+            ${{ env.REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ github.base_ref }}-latest
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
             org.opencontainers.image.revision=${{ github.event.pull_request.head.sha }}
@@ -96,7 +99,7 @@ jobs:
           endpoint-id: ${{ steps.env.outputs.portainer_endpoint_id }}
           stack-name: ${{ steps.env.outputs.stack_name }}
           stack-definition: ${{ steps.env.outputs.compose_file }}
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.image_tag }}
+          image: ${{ env.REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ steps.env.outputs.image_tag }}
           pullImage: true
           prune: true
 
@@ -110,7 +113,7 @@ jobs:
             
             **Окружение:** \`${{ steps.env.outputs.environment }}\`
             **ENV_TYPE:** \`${{ steps.env.outputs.env_type }}\`
-            **Образ:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.image_tag }}\`
+            **Образ:** \`${{ env.REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ steps.env.outputs.image_tag }}\`
             **Стек:** \`${{ steps.env.outputs.stack_name }}\`
             **Commit:** \`${{ steps.env.outputs.short_sha }}\`
             

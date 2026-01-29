@@ -75,7 +75,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   deploy:
@@ -90,6 +89,10 @@ jobs:
       - name: Определение окружения
         id: env
         run: |
+          # Преобразуем имя репозитория в lowercase для Docker (ghcr.io требует lowercase)
+          IMAGE_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          
           if [ "${{ github.base_ref }}" == "dev" ]; then
             echo "environment=staging" >> $GITHUB_OUTPUT
             echo "env_type=staging" >> $GITHUB_OUTPUT
@@ -131,8 +134,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.image_tag }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.base_ref }}-latest
+            ${{ env.REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ steps.env.outputs.image_tag }}
+            ${{ env.REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ github.base_ref }}-latest
           build-args: |
             ENV_TYPE=${{ steps.env.outputs.env_type }}
           cache-from: type=gha
@@ -146,7 +149,7 @@ jobs:
           endpoint-id: ${{ steps.env.outputs.portainer_endpoint_id }}  # DEV_PORTAINER_ENDPOINT_ID или PROD_PORTAINER_ENDPOINT_ID
           stack-name: ${{ steps.env.outputs.stack_name }}              # DEV_STACK_NAME или PROD_STACK_NAME
           stack-definition: ${{ steps.env.outputs.compose_file }}      # docker-compose.dev.yml или docker-compose.prod.yml
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.image_tag }}
+          image: ${{ env.REGISTRY }}/${{ steps.env.outputs.image_name }}:${{ steps.env.outputs.image_tag }}
           pullImage: true
           prune: true
 ```
