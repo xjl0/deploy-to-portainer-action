@@ -1,0 +1,34 @@
+version: '3.8'
+
+# Конфигурация для PRODUCTION окружения (ветка main)
+
+services:
+  my-app:
+    image: ghcr.io/username/repo:main-latest
+    container_name: my-app-prod
+    restart: unless-stopped
+    ports:
+      - "80:8080"
+    environment:
+      - NODE_ENV=production
+      - APP_ENV=production
+      - LOG_LEVEL=info
+    env_file:
+      - stack.env
+    networks:
+      - app-network
+    labels:
+      - "app.environment=production"
+      - "app.version=${VERSION:-latest}"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+networks:
+  app-network:
+    driver: bridge

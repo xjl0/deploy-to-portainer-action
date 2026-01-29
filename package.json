@@ -1,0 +1,31 @@
+{
+  "name": "portainer-deploy-action",
+  "version": "1.0.0",
+  "description": "Github Action to deploy a stack to a Portainer instance",
+  "author": "xjl0",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "keywords": [
+    "actions",
+    "node"
+  ],
+  "scripts": {
+    "format": "prettier --write **/*.ts",
+    "format-check": "prettier --check **/*.ts",
+    "lint": "eslint ./**/*.ts",
+    "build": "esbuild src/main.ts --bundle --platform=node --target=node24 --outfile=dist/index.js --sourcemap"
+  },
+  "dependencies": {
+    "@actions/core": "^3.0.0",
+    "axios": "1.13.4",
+    "handlebars": "^4.7.8"
+  },
+  "devDependencies": {
+    "@types/node": "^25.1.0",
+    "esbuild": "^0.27.2",
+    "eslint": "^9.39.2",
+    "npm-check-updates": "^19.3.2",
+    "prettier": "3.8.1",
+    "typescript": "^5.9.3"
+  }
+}

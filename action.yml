@@ -1,0 +1,41 @@
+name: 'Portainer Deploy Action'
+description: 'Github Action для развертывания стека в Portainer'
+author: 'xjl0'
+branding:
+  icon: 'upload-cloud'
+  color: 'purple'
+
+inputs:
+  portainer-host:
+    required: true
+    description: 'Хост Portainer, например https://myportainer.instance.com'
+  api-key:
+    required: true
+    description: 'API ключ Portainer для аутентификации'
+  endpoint-id:
+    required: true
+    description: 'ID endpoint в Portainer для развертывания'
+  stack-name:
+    required: true
+    description: 'Имя стека в Portainer (стек должен уже существовать)'
+  stack-definition:
+    required: true
+    description: 'Путь к docker-compose файлу, например docker-compose.prod.yml или docker-compose.master.yml'
+  template-variables:
+    required: false
+    description: 'JSON строка с переменными для замены в docker-compose файле через handlebars, например {"VERSION":"1.0.0"}'
+  image:
+    required: false
+    description: 'URI образа контейнера для обновления в определении стека, например myregistry.com/myapp:latest'
+  prune:
+    required: false
+    default: "false"
+    description: 'Удалить сервисы, которые отсутствуют в новом docker-compose.yml (очистка удалённых сервисов)'
+  pullImage:
+    required: false
+    default: "true"
+    description: 'Принудительно скачать последний образ, даже если тег не изменился'
+
+runs:
+  using: 'node24'
+  main: 'dist/index.js'

@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  my-app:
+    container_name: my-app
+    restart: unless-stopped
+    build:
+      context: .
+      args:
+        ENV_TYPE: ${ENV_TYPE}
+      dockerfile: Dockerfile
+    env_file:
+      - stack.env

@@ -1,0 +1,69 @@
+# Пример Dockerfile для вашего проекта
+# Показывает как использовать ENV_TYPE при сборке
+
+# Этап 1: Сборка
+FROM node:20-alpine AS builder
+
+# Аргумент сборки (передается из GitHub Actions)
+ARG ENV_TYPE=production
+
+# Установка в переменную окружения для использования при сборке
+ENV NODE_ENV=${ENV_TYPE}
+ENV BUILD_ENV=${ENV_TYPE}
+
+WORKDIR /app
+
+# Копирование package files
+COPY package*.json ./
+
+# Установка зависимостей
+# Для production устанавливаем только prod зависимости
+RUN if [ "$ENV_TYPE" = "production" ]; then \
+      npm ci --only=production; \
+    else \
+      npm ci; \
+    fi
+
+# Копирование исходников
+COPY . .
+
+# Сборка приложения (если нужно)
+# Пример для Next.js, Vite, etc.
+RUN if [ "$ENV_TYPE" = "production" ]; then \
+      npm run build:prod; \
+    else \
+      npm run build:dev; \
+    fi
+
+# Этап 2: Production образ
+FROM node:20-alpine AS runner
+
+# Аргумент снова нужен для финального образа
+ARG ENV_TYPE=production
+
+# Установка в окружение контейнера
+ENV NODE_ENV=${ENV_TYPE}
+ENV APP_ENV=${ENV_TYPE}
+
+WORKDIR /app
+
+# Копирование только необходимых файлов из builder
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package*.json ./
+
+# Создание пользователя (безопасность)
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+USER nodejs
+
+# Порт приложения
+EXPOSE 3000
+
+# Разные команды запуска в зависимости от окружения
+CMD if [ "$APP_ENV" = "production" ]; then \
+      node dist/main.js; \
+    else \
+      node --inspect=0.0.0.0:9229 dist/main.js; \
+    fi

@@ -1,0 +1,26 @@
+version: '3.8'
+
+# Конфигурация для DEV/STAGING окружения (ветка dev)
+
+services:
+  my-app:
+    image: ghcr.io/username/repo:dev-latest
+    container_name: my-app-dev
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=staging
+      - APP_ENV=staging
+      - LOG_LEVEL=debug
+    env_file:
+      - stack.env
+    networks:
+      - app-network
+    labels:
+      - "app.environment=staging"
+      - "app.version=${VERSION:-latest}"
+
+networks:
+  app-network:
+    driver: bridge
