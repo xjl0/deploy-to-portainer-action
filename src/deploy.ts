@@ -8,7 +8,8 @@ type DeployStack = {
   portainerHost: string
   apiKey: string
   endpointId: number
-  stackName: string
+  stackName?: string
+  stackId?: number
   stackDefinitionFile: string
   templateVariables?: object
   image?: string
@@ -62,6 +63,7 @@ export async function deployStack({
   apiKey,
   endpointId,
   stackName,
+  stackId,
   stackDefinitionFile,
   templateVariables,
   image,
@@ -78,14 +80,29 @@ export async function deployStack({
   core.debug(stackDefinitionToDeploy)
 
   try {
-    const allStacks = await portainerApi.getStacks()
-    const existingStack = allStacks.find(s => s.Name === stackName)
+    let existingStack
 
-    if (!existingStack) {
-      throw new Error(`Стек с именем "${stackName}" не найден. Пожалуйста, сначала создайте стек вручную в Portainer.`)
+    // Если указан ID - получаем стек напрямую (быстрее)
+    if (stackId) {
+      core.info(`Получение стека по ID: ${stackId}`)
+      existingStack = await portainerApi.getStack(stackId)
+      core.info(`Найден стек: ${existingStack.Name} (ID: ${existingStack.Id})`)
+    } 
+    // Иначе получаем все стеки и ищем по имени
+    else if (stackName) {
+      core.info(`Поиск стека по имени: ${stackName}`)
+      const allStacks = await portainerApi.getStacks()
+      existingStack = allStacks.find(s => s.Name === stackName)
+
+      if (!existingStack) {
+        throw new Error(`Стек с именем "${stackName}" не найден. Пожалуйста, сначала создайте стек вручную в Portainer.`)
+      }
+      core.info(`Найден существующий стек с именем: ${stackName} (ID: ${existingStack.Id})`)
+    }
+    else {
+      throw new Error('Не указан ни stack-name, ни stack-id')
     }
 
-    core.info(`Найден существующий стек с именем: ${stackName}`)
     core.info(
       `Обновление стека... Id: ${existingStack.Id} EndpointId: ${existingStack.EndpointId}`
     )

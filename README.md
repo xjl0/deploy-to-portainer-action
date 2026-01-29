@@ -22,12 +22,32 @@ GitHub Action для автоматического развертывания D
     portainer-host: ${{ secrets.PROD_PORTAINER_HOST }}
     api-key: ${{ secrets.PROD_PORTAINER_API_KEY }}
     endpoint-id: ${{ secrets.PROD_PORTAINER_ENDPOINT_ID }}
-    stack-name: ${{ secrets.PROD_STACK_NAME }}
+    stack-name: ${{ secrets.PROD_STACK_NAME }}  # или используйте stack-id (быстрее)
     stack-definition: 'docker-compose.prod.yml'  # для dev используйте docker-compose.dev.yml
     image: 'ghcr.io/username/repo:main-latest'
     pullImage: true
     prune: true
 ```
+
+### Пример с Stack ID (быстрее)
+
+Если вы знаете ID стека, используйте его вместо имени - это быстрее (один API запрос вместо двух):
+
+```yaml
+- name: Развертывание в Portainer
+  uses: xjl0/deploy-to-portainer-action@v1
+  with:
+    portainer-host: ${{ secrets.PROD_PORTAINER_HOST }}
+    api-key: ${{ secrets.PROD_PORTAINER_API_KEY }}
+    endpoint-id: ${{ secrets.PROD_PORTAINER_ENDPOINT_ID }}
+    stack-id: 200  # ID стека из Portainer (найдите в Portainer → Stacks)
+    stack-definition: 'docker-compose.prod.yml'
+    image: 'ghcr.io/username/repo:main-latest'
+    pullImage: true
+    prune: true
+```
+
+> **💡 Как узнать Stack ID:** Portainer → Stacks → откройте стек → ID в URL (`/stacks/200`) или в деталях стека.
 
 > **💡 Два файла compose для разных окружений:**
 > - `docker-compose.dev.yml` — для staging/test окружения
@@ -165,12 +185,15 @@ jobs:
 | `portainer-host` | Да | URL Portainer | - |
 | `api-key` | Да | API ключ Portainer | - |
 | `endpoint-id` | Да | ID endpoint | - |
-| `stack-name` | Да | Имя стека (должен существовать) | - |
+| `stack-name` | Нет* | Имя стека (должен существовать) | - |
+| `stack-id` | Нет* | ID стека (быстрее чем по имени) | - |
 | `stack-definition` | Да | Путь к docker-compose.yml | - |
 | `template-variables` | Нет | JSON переменные для Handlebars | - |
 | `image` | Нет | URI образа для обновления | - |
 | `prune` | Нет | Удалить отсутствующие сервисы | `false` |
 | `pullImage` | Нет | Принудительно скачать образ | `true` |
+
+**\* Примечание:** Требуется указать **либо** `stack-name`, **либо** `stack-id`. Если указан `stack-id`, он имеет приоритет и работает быстрее (один API запрос вместо двух).
 
 ## Настройка
 

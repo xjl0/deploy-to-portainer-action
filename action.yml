@@ -16,8 +16,11 @@ inputs:
     required: true
     description: 'ID endpoint в Portainer для развертывания'
   stack-name:
-    required: true
-    description: 'Имя стека в Portainer (стек должен уже существовать)'
+    required: false
+    description: 'Имя стека в Portainer (используется если stack-id не указан)'
+  stack-id:
+    required: false
+    description: 'ID стека в Portainer (если указан, используется вместо поиска по имени, быстрее)'
   stack-definition:
     required: true
     description: 'Путь к docker-compose файлу, например docker-compose.prod.yml или docker-compose.master.yml'

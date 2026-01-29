@@ -40131,6 +40131,7 @@ async function deployStack({
   apiKey,
   endpointId,
   stackName,
+  stackId,
   stackDefinitionFile,
   templateVariables,
   image,
@@ -40145,12 +40146,22 @@ async function deployStack({
   );
   debug(stackDefinitionToDeploy);
   try {
-    const allStacks = await portainerApi.getStacks();
-    const existingStack = allStacks.find((s) => s.Name === stackName);
-    if (!existingStack) {
-      throw new Error(`\u0421\u0442\u0435\u043A \u0441 \u0438\u043C\u0435\u043D\u0435\u043C "${stackName}" \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u041F\u043E\u0436\u0430\u043B\u0443\u0439\u0441\u0442\u0430, \u0441\u043D\u0430\u0447\u0430\u043B\u0430 \u0441\u043E\u0437\u0434\u0430\u0439\u0442\u0435 \u0441\u0442\u0435\u043A \u0432\u0440\u0443\u0447\u043D\u0443\u044E \u0432 Portainer.`);
+    let existingStack;
+    if (stackId) {
+      info(`\u041F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u0435 \u0441\u0442\u0435\u043A\u0430 \u043F\u043E ID: ${stackId}`);
+      existingStack = await portainerApi.getStack(stackId);
+      info(`\u041D\u0430\u0439\u0434\u0435\u043D \u0441\u0442\u0435\u043A: ${existingStack.Name} (ID: ${existingStack.Id})`);
+    } else if (stackName) {
+      info(`\u041F\u043E\u0438\u0441\u043A \u0441\u0442\u0435\u043A\u0430 \u043F\u043E \u0438\u043C\u0435\u043D\u0438: ${stackName}`);
+      const allStacks = await portainerApi.getStacks();
+      existingStack = allStacks.find((s) => s.Name === stackName);
+      if (!existingStack) {
+        throw new Error(`\u0421\u0442\u0435\u043A \u0441 \u0438\u043C\u0435\u043D\u0435\u043C "${stackName}" \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u041F\u043E\u0436\u0430\u043B\u0443\u0439\u0441\u0442\u0430, \u0441\u043D\u0430\u0447\u0430\u043B\u0430 \u0441\u043E\u0437\u0434\u0430\u0439\u0442\u0435 \u0441\u0442\u0435\u043A \u0432\u0440\u0443\u0447\u043D\u0443\u044E \u0432 Portainer.`);
+      }
+      info(`\u041D\u0430\u0439\u0434\u0435\u043D \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0439 \u0441\u0442\u0435\u043A \u0441 \u0438\u043C\u0435\u043D\u0435\u043C: ${stackName} (ID: ${existingStack.Id})`);
+    } else {
+      throw new Error("\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D \u043D\u0438 stack-name, \u043D\u0438 stack-id");
     }
-    info(`\u041D\u0430\u0439\u0434\u0435\u043D \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0439 \u0441\u0442\u0435\u043A \u0441 \u0438\u043C\u0435\u043D\u0435\u043C: ${stackName}`);
     info(
       `\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0441\u0442\u0435\u043A\u0430... Id: ${existingStack.Id} EndpointId: ${existingStack.EndpointId}`
     );
@@ -40187,8 +40198,15 @@ async function run() {
       required: true
     });
     const stackName = getInput("stack-name", {
-      required: true
+      required: false
     });
+    const stackIdInput = getInput("stack-id", {
+      required: false
+    });
+    const stackId = stackIdInput ? parseInt(stackIdInput) : void 0;
+    if (!stackName && !stackId) {
+      throw new Error("\u041D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E \u0443\u043A\u0430\u0437\u0430\u0442\u044C stack-name \u0438\u043B\u0438 stack-id");
+    }
     const stackDefinitionFile = getInput("stack-definition", {
       required: true
     });
@@ -40209,6 +40227,7 @@ async function run() {
       apiKey,
       endpointId: parseInt(endpointId) || 1,
       stackName,
+      stackId,
       stackDefinitionFile,
       templateVariables: templateVariables ? JSON.parse(templateVariables) : void 0,
       image,

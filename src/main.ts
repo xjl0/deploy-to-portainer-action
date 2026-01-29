@@ -14,8 +14,18 @@ export async function run(): Promise<void> {
       required: true
     })
     const stackName: string = core.getInput('stack-name', {
-      required: true
+      required: false
     })
+    const stackIdInput: string = core.getInput('stack-id', {
+      required: false
+    })
+    const stackId: number | undefined = stackIdInput ? parseInt(stackIdInput) : undefined
+    
+    // Проверяем что указан хотя бы один из параметров
+    if (!stackName && !stackId) {
+      throw new Error('Необходимо указать stack-name или stack-id')
+    }
+    
     const stackDefinitionFile: string = core.getInput('stack-definition', {
       required: true
     })
@@ -37,6 +47,7 @@ export async function run(): Promise<void> {
       apiKey,
       endpointId: parseInt(endpointId) || 1,
       stackName,
+      stackId,
       stackDefinitionFile,
       templateVariables: templateVariables ? JSON.parse(templateVariables) : undefined,
       image,
