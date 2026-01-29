@@ -121,12 +121,41 @@ export async function deployStack({
               )
             }
           } else {
+            // Покажем все доступные стеки для диагностики
+            core.info('📋 Получение списка всех стеков для диагностики...')
+            try {
+              const allStacks = await portainerApi.getStacks()
+              const stacksForEndpoint = allStacks.filter(s => s.EndpointId === endpointId)
+              
+              core.info(`\n🔍 Найдено стеков для endpoint ${endpointId}: ${stacksForEndpoint.length}`)
+              if (stacksForEndpoint.length > 0) {
+                core.info('\nДоступные стеки:')
+                stacksForEndpoint.forEach(s => {
+                  core.info(`  📦 ${s.Name} (ID: ${s.Id})`)
+                })
+              } else {
+                core.warning(`⚠️  Нет стеков для endpoint ${endpointId}`)
+                
+                // Покажем стеки из других endpoints
+                const otherStacks = allStacks.filter(s => s.EndpointId !== endpointId)
+                if (otherStacks.length > 0) {
+                  core.info('\nСтеки в других endpoints:')
+                  otherStacks.forEach(s => {
+                    core.info(`  📦 ${s.Name} (ID: ${s.Id}, Endpoint: ${s.EndpointId})`)
+                  })
+                }
+              }
+            } catch (listError) {
+              core.warning('Не удалось получить список стеков')
+            }
+            
             throw new Error(
-              `Стек с ID ${stackId} не найден. Возможные причины:\n` +
-              `1. ID неправильный (проверьте в Portainer → Stacks)\n` +
-              `2. Стек принадлежит другому endpoint (текущий: ${endpointId})\n` +
-              `3. Стек был удалён\n\n` +
-              `Укажите stack-name для поиска или исправьте stack-id.`
+              `Стек с ID ${stackId} не найден.\n\n` +
+              `Проверьте список доступных стеков выше ☝️\n\n` +
+              `Решения:\n` +
+              `1. Укажите правильный stack-id из списка выше\n` +
+              `2. ИЛИ добавьте stack-name вместо stack-id\n` +
+              `3. ИЛИ укажите оба (stack-id для скорости + stack-name как fallback)`
             )
           }
         } else {
