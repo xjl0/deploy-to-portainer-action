@@ -40091,7 +40091,13 @@ var PortainerApi = class {
     return data;
   }
   async getStack(id) {
-    const { data } = await this.axiosInstance.get(`/stacks/${id}`);
+    const url2 = `/stacks/${id}`;
+    console.log(`[DEBUG] \u0417\u0430\u043F\u0440\u043E\u0441 \u043A: ${this.axiosInstance.defaults.baseURL}${url2}`);
+    console.log(`[DEBUG] \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0438:`, {
+      "X-API-Key": this.axiosInstance.defaults.headers["X-API-Key"] ? "***" : "\u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442",
+      "X-Registry-Auth": this.axiosInstance.defaults.headers["X-Registry-Auth"] || "\u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442"
+    });
+    const { data } = await this.axiosInstance.get(url2);
     return data;
   }
   async updateStack(id, params, body) {

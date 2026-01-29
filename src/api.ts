@@ -41,7 +41,14 @@ export class PortainerApi {
   }
 
   async getStack(id: number): Promise<StackData> {
-    const { data } = await this.axiosInstance.get<StackData>(`/stacks/${id}`)
+    const url = `/stacks/${id}`
+    console.log(`[DEBUG] Запрос к: ${this.axiosInstance.defaults.baseURL}${url}`)
+    console.log(`[DEBUG] Заголовки:`, {
+      'X-API-Key': this.axiosInstance.defaults.headers['X-API-Key'] ? '***' : 'отсутствует',
+      'X-Registry-Auth': this.axiosInstance.defaults.headers['X-Registry-Auth'] || 'отсутствует'
+    })
+    
+    const { data } = await this.axiosInstance.get<StackData>(url)
     return data
   }
 
