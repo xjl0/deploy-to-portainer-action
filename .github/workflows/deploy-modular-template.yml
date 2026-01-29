@@ -44,12 +44,10 @@ jobs:
       image_name: ${{ steps.env.outputs.image_name }}
       image_tag: ${{ steps.env.outputs.image_tag }}
       compose_file: ${{ steps.env.outputs.compose_file }}
-      stack_name: ${{ steps.env.outputs.stack_name }}
-      stack_id: ${{ steps.env.outputs.stack_id }}
       skip_build: ${{ steps.env.outputs.skip_build }}
       short_sha: ${{ steps.env.outputs.short_sha }}
       # ВАЖНО: Секреты нельзя передавать через outputs! GitHub их блокирует.
-      # Используем только environment чтобы в deploy выбрать правильные секреты
+      # stack_name и stack_id тоже из secrets, передаём напрямую в deploy job
 
     steps:
       - name: Определение окружения
@@ -77,20 +75,10 @@ jobs:
               echo "environment=staging" >> $GITHUB_OUTPUT
               echo "env_type=staging" >> $GITHUB_OUTPUT
               echo "compose_file=docker-compose.dev.yml" >> $GITHUB_OUTPUT
-              echo "stack_name=${{ secrets.DEV_STACK_NAME }}" >> $GITHUB_OUTPUT
-              echo "stack_id=${{ secrets.DEV_STACK_ID }}" >> $GITHUB_OUTPUT
-              echo "portainer_host=${{ secrets.DEV_PORTAINER_HOST }}" >> $GITHUB_OUTPUT
-              echo "portainer_api_key=${{ secrets.DEV_PORTAINER_API_KEY }}" >> $GITHUB_OUTPUT
-              echo "portainer_endpoint_id=${{ secrets.DEV_PORTAINER_ENDPOINT_ID }}" >> $GITHUB_OUTPUT
             else
               echo "environment=production" >> $GITHUB_OUTPUT
               echo "env_type=production" >> $GITHUB_OUTPUT
               echo "compose_file=docker-compose.prod.yml" >> $GITHUB_OUTPUT
-              echo "stack_name=${{ secrets.PROD_STACK_NAME }}" >> $GITHUB_OUTPUT
-              echo "stack_id=${{ secrets.PROD_STACK_ID }}" >> $GITHUB_OUTPUT
-              echo "portainer_host=${{ secrets.PROD_PORTAINER_HOST }}" >> $GITHUB_OUTPUT
-              echo "portainer_api_key=${{ secrets.PROD_PORTAINER_API_KEY }}" >> $GITHUB_OUTPUT
-              echo "portainer_endpoint_id=${{ secrets.PROD_PORTAINER_ENDPOINT_ID }}" >> $GITHUB_OUTPUT
             fi
           # Pull Request (автоматический)
           else
@@ -104,18 +92,6 @@ jobs:
               echo "environment=staging" >> $GITHUB_OUTPUT
               echo "env_type=staging" >> $GITHUB_OUTPUT
               echo "compose_file=docker-compose.dev.yml" >> $GITHUB_OUTPUT
-              
-              echo ""
-              echo "🔍 DEBUG: Проверка DEV секретов:"
-              echo "  DEV_PORTAINER_HOST: ${{ secrets.DEV_PORTAINER_HOST != '' && '✅ установлен' || '❌ НЕТ' }}"
-              echo "  DEV_PORTAINER_API_KEY: ${{ secrets.DEV_PORTAINER_API_KEY != '' && '✅ установлен' || '❌ НЕТ' }}"
-              echo "  DEV_PORTAINER_ENDPOINT_ID: ${{ secrets.DEV_PORTAINER_ENDPOINT_ID != '' && '✅ установлен' || '❌ НЕТ' }}"
-              echo "  DEV_STACK_NAME: ${{ secrets.DEV_STACK_NAME != '' && '✅ установлен' || '❌ НЕТ' }}"
-              echo "  DEV_STACK_ID: ${{ secrets.DEV_STACK_ID != '' && '✅ установлен' || '❌ НЕТ' }}"
-              echo ""
-              
-              echo "stack_name=${{ secrets.DEV_STACK_NAME }}" >> $GITHUB_OUTPUT
-              echo "stack_id=${{ secrets.DEV_STACK_ID }}" >> $GITHUB_OUTPUT
               echo "portainer_host=${{ secrets.DEV_PORTAINER_HOST }}" >> $GITHUB_OUTPUT
               echo "portainer_api_key=${{ secrets.DEV_PORTAINER_API_KEY }}" >> $GITHUB_OUTPUT
               echo "portainer_endpoint_id=${{ secrets.DEV_PORTAINER_ENDPOINT_ID }}" >> $GITHUB_OUTPUT
@@ -123,18 +99,6 @@ jobs:
               echo "environment=production" >> $GITHUB_OUTPUT
               echo "env_type=production" >> $GITHUB_OUTPUT
               echo "compose_file=docker-compose.prod.yml" >> $GITHUB_OUTPUT
-              
-              echo ""
-              echo "🔍 DEBUG: Проверка PROD секретов:"
-              echo "  PROD_PORTAINER_HOST: ${{ secrets.PROD_PORTAINER_HOST != '' && '✅ установлен' || '❌ НЕТ' }}"
-              echo "  PROD_PORTAINER_API_KEY: ${{ secrets.PROD_PORTAINER_API_KEY != '' && '✅ установлен' || '❌ НЕТ' }}"
-              echo "  PROD_PORTAINER_ENDPOINT_ID: ${{ secrets.PROD_PORTAINER_ENDPOINT_ID != '' && '✅ установлен' || '❌ НЕТ' }}"
-              echo "  PROD_STACK_NAME: ${{ secrets.PROD_STACK_NAME != '' && '✅ установлен' || '❌ НЕТ' }}"
-              echo "  PROD_STACK_ID: ${{ secrets.PROD_STACK_ID != '' && '✅ установлен' || '❌ НЕТ' }}"
-              echo ""
-              
-              echo "stack_name=${{ secrets.PROD_STACK_NAME }}" >> $GITHUB_OUTPUT
-              echo "stack_id=${{ secrets.PROD_STACK_ID }}" >> $GITHUB_OUTPUT
               echo "portainer_host=${{ secrets.PROD_PORTAINER_HOST }}" >> $GITHUB_OUTPUT
               echo "portainer_api_key=${{ secrets.PROD_PORTAINER_API_KEY }}" >> $GITHUB_OUTPUT
               echo "portainer_endpoint_id=${{ secrets.PROD_PORTAINER_ENDPOINT_ID }}" >> $GITHUB_OUTPUT
@@ -208,10 +172,14 @@ jobs:
             echo "portainer_host=${{ secrets.DEV_PORTAINER_HOST }}" >> $GITHUB_OUTPUT
             echo "portainer_api_key=${{ secrets.DEV_PORTAINER_API_KEY }}" >> $GITHUB_OUTPUT
             echo "portainer_endpoint_id=${{ secrets.DEV_PORTAINER_ENDPOINT_ID }}" >> $GITHUB_OUTPUT
+            echo "stack_name=${{ secrets.DEV_STACK_NAME }}" >> $GITHUB_OUTPUT
+            echo "stack_id=${{ secrets.DEV_STACK_ID }}" >> $GITHUB_OUTPUT
           else
             echo "portainer_host=${{ secrets.PROD_PORTAINER_HOST }}" >> $GITHUB_OUTPUT
             echo "portainer_api_key=${{ secrets.PROD_PORTAINER_API_KEY }}" >> $GITHUB_OUTPUT
             echo "portainer_endpoint_id=${{ secrets.PROD_PORTAINER_ENDPOINT_ID }}" >> $GITHUB_OUTPUT
+            echo "stack_name=${{ secrets.PROD_STACK_NAME }}" >> $GITHUB_OUTPUT
+            echo "stack_id=${{ secrets.PROD_STACK_ID }}" >> $GITHUB_OUTPUT
           fi
           
           echo "✅ Секреты загружены для $ENV"
@@ -225,8 +193,8 @@ jobs:
           portainer-host: ${{ steps.secrets.outputs.portainer_host }}
           api-key: ${{ steps.secrets.outputs.portainer_api_key }}
           endpoint-id: ${{ steps.secrets.outputs.portainer_endpoint_id }}
-          stack-name: ${{ needs.setup.outputs.stack_name }}
-          stack-id: ${{ needs.setup.outputs.stack_id }}
+          stack-name: ${{ steps.secrets.outputs.stack_name }}
+          stack-id: ${{ steps.secrets.outputs.stack_id }}
           stack-definition: ${{ needs.setup.outputs.compose_file }}
           image: ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.setup.outputs.image_tag }}
           pullImage: true
@@ -257,7 +225,6 @@ jobs:
             **Окружение:** \`${{ needs.setup.outputs.environment }}\`
             **ENV_TYPE:** \`${{ needs.setup.outputs.env_type }}\`
             **Образ:** \`${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.setup.outputs.image_tag }}\`
-            **Стек:** \`${{ needs.setup.outputs.stack_name || needs.setup.outputs.stack_id }}\`
             **Commit:** \`${{ needs.setup.outputs.short_sha }}\`
             
             Приложение развернуто и доступно в Portainer.`;

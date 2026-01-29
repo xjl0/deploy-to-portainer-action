@@ -40078,8 +40078,20 @@ var {
 // src/api.ts
 var PortainerApi = class {
   constructor(host, apiKey) {
+    console.log(`[DEBUG] \u0412\u0445\u043E\u0434\u044F\u0449\u0438\u0439 portainer-host: "${host}"`);
+    let cleanHost = host.replace(/\/+$/, "");
+    if (!cleanHost.startsWith("http://") && !cleanHost.startsWith("https://")) {
+      console.log("[WARNING] \u0425\u043E\u0441\u0442 \u0431\u0435\u0437 \u043F\u0440\u043E\u0442\u043E\u043A\u043E\u043B\u0430, \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0435\u043C https://");
+      cleanHost = `https://${cleanHost}`;
+    }
+    if (cleanHost.endsWith("/api")) {
+      cleanHost = cleanHost.slice(0, -4);
+    }
+    const baseURL = `${cleanHost}/api`;
+    console.log(`[DEBUG] \u0418\u0442\u043E\u0433\u043E\u0432\u044B\u0439 base URL: ${baseURL}`);
+    console.log(`[DEBUG] X-API-Key \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D: ${apiKey ? "\u0434\u0430" : "\u043D\u0435\u0442"}`);
     this.axiosInstance = axios_default.create({
-      baseURL: `${host}/api`,
+      baseURL,
       headers: {
         "X-API-Key": apiKey,
         "X-Registry-Auth": `eyJyZWdpc3RyeUlkIjoxfQ==`
@@ -40087,7 +40099,13 @@ var PortainerApi = class {
     });
   }
   async getStacks() {
-    const { data } = await this.axiosInstance.get("/stacks");
+    const url2 = "/stacks";
+    console.log(`[DEBUG] \u0417\u0430\u043F\u0440\u043E\u0441 \u043A: ${this.axiosInstance.defaults.baseURL}${url2}`);
+    console.log(`[DEBUG] \u0417\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0438:`, {
+      "X-API-Key": this.axiosInstance.defaults.headers["X-API-Key"] ? "***" : "\u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442",
+      "X-Registry-Auth": this.axiosInstance.defaults.headers["X-Registry-Auth"] || "\u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442"
+    });
+    const { data } = await this.axiosInstance.get(url2);
     return data;
   }
   async getStack(id) {
