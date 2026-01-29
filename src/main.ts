@@ -21,8 +21,11 @@ export async function run(): Promise<void> {
     })
     const stackId: number | undefined = stackIdInput ? parseInt(stackIdInput) : undefined
     
-    // Проверяем что указан хотя бы один из параметров
-    if (!stackName && !stackId) {
+    // Проверяем что указан хотя бы один из параметров (игнорируем пустые строки)
+    const hasStackName = stackName && stackName.trim().length > 0
+    const hasStackId = stackId !== undefined && !isNaN(stackId)
+    
+    if (!hasStackName && !hasStackId) {
       throw new Error('Необходимо указать stack-name или stack-id')
     }
     

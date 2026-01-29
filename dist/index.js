@@ -40280,7 +40280,9 @@ async function run() {
       required: false
     });
     const stackId = stackIdInput ? parseInt(stackIdInput) : void 0;
-    if (!stackName && !stackId) {
+    const hasStackName = stackName && stackName.trim().length > 0;
+    const hasStackId = stackId !== void 0 && !isNaN(stackId);
+    if (!hasStackName && !hasStackId) {
       throw new Error("\u041D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E \u0443\u043A\u0430\u0437\u0430\u0442\u044C stack-name \u0438\u043B\u0438 stack-id");
     }
     const stackDefinitionFile = getInput("stack-definition", {
