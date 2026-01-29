@@ -56,6 +56,10 @@ jobs:
       - name: Определение окружения
         id: env
         run: |
+          echo "🔍 DEBUG: Event name: ${{ github.event_name }}"
+          echo "🔍 DEBUG: Base ref: ${{ github.base_ref }}"
+          echo "🔍 DEBUG: Ref: ${{ github.ref }}"
+          
           # Преобразуем имя репозитория в lowercase
           IMAGE_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
@@ -121,7 +125,11 @@ jobs:
             fi
           fi
           
-          echo "✅ Окружение определено: $(cat $GITHUB_OUTPUT | grep environment=)"
+          echo "✅ Окружение определено"
+          echo ""
+          echo "📋 Outputs:"
+          cat $GITHUB_OUTPUT
+          echo ""
 
   # Job 2: Сборка образа (пропускается если skip_build=true)
   build:
@@ -171,6 +179,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Debug - проверка outputs
+        run: |
+          echo "🔍 DEBUG: Checking outputs from setup job"
+          echo "portainer_host: ${{ needs.setup.outputs.portainer_host }}"
+          echo "portainer_api_key: ${{ needs.setup.outputs.portainer_api_key && '***' || 'ПУСТО' }}"
+          echo "endpoint_id: ${{ needs.setup.outputs.portainer_endpoint_id }}"
+          echo "stack_name: ${{ needs.setup.outputs.stack_name }}"
+          echo "stack_id: ${{ needs.setup.outputs.stack_id }}"
+          echo "compose_file: ${{ needs.setup.outputs.compose_file }}"
+          echo "image_name: ${{ needs.setup.outputs.image_name }}"
+          echo "image_tag: ${{ needs.setup.outputs.image_tag }}"
+          
+          if [ -z "${{ needs.setup.outputs.portainer_host }}" ]; then
+            echo "❌ ERROR: portainer_host пустой!"
+            exit 1
+          fi
+
       - name: Получение кода (для docker-compose файлов)
         uses: actions/checkout@v4
 
