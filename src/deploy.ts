@@ -40,7 +40,21 @@ function generateNewStackDefinition(
 
   const imageWithoutTag = image.substring(0, image.indexOf(':'))
   core.info(`Вставка образа ${image} в определение стека`)
-  return stackDefinition.replace(new RegExp(`${imageWithoutTag}(:.*)?\n`), `${image}\n`)
+  
+  // Экранируем специальные символы regex в имени образа
+  const escapedImageWithoutTag = imageWithoutTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  
+  // Поддерживаем оба формата: с кавычками и без
+  // Формат 1: image: "repo:tag" или image: 'repo:tag'
+  // Формат 2: image: repo:tag
+  const imageRegex = new RegExp(
+    `(image:\\s*["']?)${escapedImageWithoutTag}(?::[^"'\\s\\n]*)?(["']?)`,
+    'g'
+  )
+  
+  return stackDefinition.replace(imageRegex, (match, prefix, suffix) => {
+    return `${prefix}${image}${suffix}`
+  })
 }
 
 export async function deployStack({

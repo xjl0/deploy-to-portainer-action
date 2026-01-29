@@ -26,6 +26,9 @@ jobs:
       - name: Определение окружения
         id: env
         run: |
+          echo "🔍 Целевая ветка PR (base_ref): ${{ github.base_ref }}"
+          echo "📦 Исходная ветка PR (head_ref): ${{ github.head_ref }}"
+          
           # Преобразуем имя репозитория в lowercase для Docker (ghcr.io требует lowercase)
           IMAGE_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
@@ -46,6 +49,10 @@ jobs:
             echo "portainer_host=${{ secrets.PROD_PORTAINER_HOST }}" >> $GITHUB_OUTPUT
             echo "portainer_api_key=${{ secrets.PROD_PORTAINER_API_KEY }}" >> $GITHUB_OUTPUT
             echo "portainer_endpoint_id=${{ secrets.PROD_PORTAINER_ENDPOINT_ID }}" >> $GITHUB_OUTPUT
+          else
+            echo "❌ ОШИБКА: Целевая ветка '${{ github.base_ref }}' не поддерживается!"
+            echo "   Ожидается 'dev' или 'main'"
+            exit 1
           fi
           
           # Генерация тега образа
@@ -53,6 +60,8 @@ jobs:
           IMAGE_TAG="${{ github.base_ref }}-${SHORT_SHA}"
           echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
           echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          
+          echo "✅ Окружение определено успешно"
 
       # 2. Получение кода
       - name: Получение кода

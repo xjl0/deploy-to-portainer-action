@@ -40117,9 +40117,14 @@ function generateNewStackDefinition(stackDefinitionFile, templateVariables, imag
   }
   const imageWithoutTag = image.substring(0, image.indexOf(":"));
   info(`\u0412\u0441\u0442\u0430\u0432\u043A\u0430 \u043E\u0431\u0440\u0430\u0437\u0430 ${image} \u0432 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u0435 \u0441\u0442\u0435\u043A\u0430`);
-  return stackDefinition.replace(new RegExp(`${imageWithoutTag}(:.*)?
-`), `${image}
-`);
+  const escapedImageWithoutTag = imageWithoutTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const imageRegex = new RegExp(
+    `(image:\\s*["']?)${escapedImageWithoutTag}(?::[^"'\\s\\n]*)?(["']?)`,
+    "g"
+  );
+  return stackDefinition.replace(imageRegex, (match, prefix, suffix) => {
+    return `${prefix}${image}${suffix}`;
+  });
 }
 async function deployStack({
   portainerHost,
