@@ -85,8 +85,54 @@ export async function deployStack({
     // Если указан ID - получаем стек напрямую (быстрее)
     if (stackId) {
       core.info(`Получение стека по ID: ${stackId}`)
-      existingStack = await portainerApi.getStack(stackId)
-      core.info(`Найден стек: ${existingStack.Name} (ID: ${existingStack.Id})`)
+      try {
+        existingStack = await portainerApi.getStack(stackId)
+        core.info(`Найден стек: ${existingStack.Name} (ID: ${existingStack.Id})`)
+        core.info(`  EndpointId стека: ${existingStack.EndpointId}`)
+        core.info(`  Ожидаемый EndpointId: ${endpointId}`)
+        
+        // Проверяем соответствие endpoint
+        if (existingStack.EndpointId !== endpointId) {
+          core.warning(`⚠️  Стек ${stackId} принадлежит endpoint ${existingStack.EndpointId}, а указан endpoint ${endpointId}`)
+        }
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          core.warning(`⚠️  Стек с ID ${stackId} не найден`)
+          
+          // Попытка найти по имени если указан
+          if (stackName) {
+            core.info(`Попытка найти стек по имени: ${stackName}`)
+            const allStacks = await portainerApi.getStacks()
+            const stacksForEndpoint = allStacks.filter(s => s.EndpointId === endpointId)
+            
+            core.info(`Найдено стеков для endpoint ${endpointId}: ${stacksForEndpoint.length}`)
+            stacksForEndpoint.forEach(s => {
+              core.info(`  - ${s.Name} (ID: ${s.Id})`)
+            })
+            
+            existingStack = stacksForEndpoint.find(s => s.Name === stackName)
+            if (existingStack) {
+              core.info(`✅ Найден стек по имени: ${stackName} (ID: ${existingStack.Id})`)
+              core.warning(`💡 Обновите секрет STACK_ID на ${existingStack.Id} для ускорения`)
+            } else {
+              throw new Error(
+                `Стек "${stackName}" не найден в endpoint ${endpointId}.\n` +
+                `Доступные стеки: ${stacksForEndpoint.map(s => s.Name).join(', ') || 'нет'}`
+              )
+            }
+          } else {
+            throw new Error(
+              `Стек с ID ${stackId} не найден. Возможные причины:\n` +
+              `1. ID неправильный (проверьте в Portainer → Stacks)\n` +
+              `2. Стек принадлежит другому endpoint (текущий: ${endpointId})\n` +
+              `3. Стек был удалён\n\n` +
+              `Укажите stack-name для поиска или исправьте stack-id.`
+            )
+          }
+        } else {
+          throw error
+        }
+      }
     } 
     // Иначе получаем все стеки и ищем по имени
     else if (stackName) {

@@ -36444,6 +36444,9 @@ function debug(message) {
 function error(message, properties = {}) {
   issueCommand("error", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
+function warning(message, properties = {}) {
+  issueCommand("warning", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+}
 function info(message) {
   process.stdout.write(message + os3.EOL);
 }
@@ -40149,8 +40152,49 @@ async function deployStack({
     let existingStack;
     if (stackId) {
       info(`\u041F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u0435 \u0441\u0442\u0435\u043A\u0430 \u043F\u043E ID: ${stackId}`);
-      existingStack = await portainerApi.getStack(stackId);
-      info(`\u041D\u0430\u0439\u0434\u0435\u043D \u0441\u0442\u0435\u043A: ${existingStack.Name} (ID: ${existingStack.Id})`);
+      try {
+        existingStack = await portainerApi.getStack(stackId);
+        info(`\u041D\u0430\u0439\u0434\u0435\u043D \u0441\u0442\u0435\u043A: ${existingStack.Name} (ID: ${existingStack.Id})`);
+        info(`  EndpointId \u0441\u0442\u0435\u043A\u0430: ${existingStack.EndpointId}`);
+        info(`  \u041E\u0436\u0438\u0434\u0430\u0435\u043C\u044B\u0439 EndpointId: ${endpointId}`);
+        if (existingStack.EndpointId !== endpointId) {
+          warning(`\u26A0\uFE0F  \u0421\u0442\u0435\u043A ${stackId} \u043F\u0440\u0438\u043D\u0430\u0434\u043B\u0435\u0436\u0438\u0442 endpoint ${existingStack.EndpointId}, \u0430 \u0443\u043A\u0430\u0437\u0430\u043D endpoint ${endpointId}`);
+        }
+      } catch (error2) {
+        if (error2.response?.status === 404) {
+          warning(`\u26A0\uFE0F  \u0421\u0442\u0435\u043A \u0441 ID ${stackId} \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D`);
+          if (stackName) {
+            info(`\u041F\u043E\u043F\u044B\u0442\u043A\u0430 \u043D\u0430\u0439\u0442\u0438 \u0441\u0442\u0435\u043A \u043F\u043E \u0438\u043C\u0435\u043D\u0438: ${stackName}`);
+            const allStacks = await portainerApi.getStacks();
+            const stacksForEndpoint = allStacks.filter((s) => s.EndpointId === endpointId);
+            info(`\u041D\u0430\u0439\u0434\u0435\u043D\u043E \u0441\u0442\u0435\u043A\u043E\u0432 \u0434\u043B\u044F endpoint ${endpointId}: ${stacksForEndpoint.length}`);
+            stacksForEndpoint.forEach((s) => {
+              info(`  - ${s.Name} (ID: ${s.Id})`);
+            });
+            existingStack = stacksForEndpoint.find((s) => s.Name === stackName);
+            if (existingStack) {
+              info(`\u2705 \u041D\u0430\u0439\u0434\u0435\u043D \u0441\u0442\u0435\u043A \u043F\u043E \u0438\u043C\u0435\u043D\u0438: ${stackName} (ID: ${existingStack.Id})`);
+              warning(`\u{1F4A1} \u041E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0441\u0435\u043A\u0440\u0435\u0442 STACK_ID \u043D\u0430 ${existingStack.Id} \u0434\u043B\u044F \u0443\u0441\u043A\u043E\u0440\u0435\u043D\u0438\u044F`);
+            } else {
+              throw new Error(
+                `\u0421\u0442\u0435\u043A "${stackName}" \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u0432 endpoint ${endpointId}.
+\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u0435 \u0441\u0442\u0435\u043A\u0438: ${stacksForEndpoint.map((s) => s.Name).join(", ") || "\u043D\u0435\u0442"}`
+              );
+            }
+          } else {
+            throw new Error(
+              `\u0421\u0442\u0435\u043A \u0441 ID ${stackId} \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D. \u0412\u043E\u0437\u043C\u043E\u0436\u043D\u044B\u0435 \u043F\u0440\u0438\u0447\u0438\u043D\u044B:
+1. ID \u043D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u044B\u0439 (\u043F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0432 Portainer \u2192 Stacks)
+2. \u0421\u0442\u0435\u043A \u043F\u0440\u0438\u043D\u0430\u0434\u043B\u0435\u0436\u0438\u0442 \u0434\u0440\u0443\u0433\u043E\u043C\u0443 endpoint (\u0442\u0435\u043A\u0443\u0449\u0438\u0439: ${endpointId})
+3. \u0421\u0442\u0435\u043A \u0431\u044B\u043B \u0443\u0434\u0430\u043B\u0451\u043D
+
+\u0423\u043A\u0430\u0436\u0438\u0442\u0435 stack-name \u0434\u043B\u044F \u043F\u043E\u0438\u0441\u043A\u0430 \u0438\u043B\u0438 \u0438\u0441\u043F\u0440\u0430\u0432\u044C\u0442\u0435 stack-id.`
+            );
+          }
+        } else {
+          throw error2;
+        }
+      }
     } else if (stackName) {
       info(`\u041F\u043E\u0438\u0441\u043A \u0441\u0442\u0435\u043A\u0430 \u043F\u043E \u0438\u043C\u0435\u043D\u0438: ${stackName}`);
       const allStacks = await portainerApi.getStacks();

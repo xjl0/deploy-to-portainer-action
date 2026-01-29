@@ -1,0 +1,245 @@
+# МОДУЛЬНЫЙ ШАБЛОН - разделённые jobs для переиспользования
+# Копируйте этот файл в ваш репозиторий: .github/workflows/deploy.yml
+
+name: Модульный деплой через PR
+
+on:
+  # Автоматический запуск при PR
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - dev
+      - main
+  
+  # Ручной запуск для переиспользования готового образа
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Окружение (dev/prod)'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+      image_tag:
+        description: 'Тег образа (например: dev-abc1234)'
+        required: true
+        type: string
+      skip_build:
+        description: 'Пропустить сборку (использовать готовый образ)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # Job 1: Определение параметров
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      env_type: ${{ steps.env.outputs.env_type }}
+      image_name: ${{ steps.env.outputs.image_name }}
+      image_tag: ${{ steps.env.outputs.image_tag }}
+      compose_file: ${{ steps.env.outputs.compose_file }}
+      stack_name: ${{ steps.env.outputs.stack_name }}
+      stack_id: ${{ steps.env.outputs.stack_id }}
+      portainer_host: ${{ steps.env.outputs.portainer_host }}
+      portainer_api_key: ${{ steps.env.outputs.portainer_api_key }}
+      portainer_endpoint_id: ${{ steps.env.outputs.portainer_endpoint_id }}
+      skip_build: ${{ steps.env.outputs.skip_build }}
+      short_sha: ${{ steps.env.outputs.short_sha }}
+
+    steps:
+      - name: Определение окружения
+        id: env
+        run: |
+          # Преобразуем имя репозитория в lowercase
+          IMAGE_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          
+          # Workflow dispatch (ручной запуск)
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+            SKIP_BUILD="${{ github.event.inputs.skip_build }}"
+            IMAGE_TAG="${{ github.event.inputs.image_tag }}"
+            
+            echo "skip_build=${SKIP_BUILD}" >> $GITHUB_OUTPUT
+            echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+            echo "short_sha=${IMAGE_TAG##*-}" >> $GITHUB_OUTPUT
+            
+            if [ "$ENV" == "dev" ]; then
+              echo "environment=staging" >> $GITHUB_OUTPUT
+              echo "env_type=staging" >> $GITHUB_OUTPUT
+              echo "compose_file=docker-compose.dev.yml" >> $GITHUB_OUTPUT
+              echo "stack_name=${{ secrets.DEV_STACK_NAME }}" >> $GITHUB_OUTPUT
+              echo "stack_id=${{ secrets.DEV_STACK_ID }}" >> $GITHUB_OUTPUT
+              echo "portainer_host=${{ secrets.DEV_PORTAINER_HOST }}" >> $GITHUB_OUTPUT
+              echo "portainer_api_key=${{ secrets.DEV_PORTAINER_API_KEY }}" >> $GITHUB_OUTPUT
+              echo "portainer_endpoint_id=${{ secrets.DEV_PORTAINER_ENDPOINT_ID }}" >> $GITHUB_OUTPUT
+            else
+              echo "environment=production" >> $GITHUB_OUTPUT
+              echo "env_type=production" >> $GITHUB_OUTPUT
+              echo "compose_file=docker-compose.prod.yml" >> $GITHUB_OUTPUT
+              echo "stack_name=${{ secrets.PROD_STACK_NAME }}" >> $GITHUB_OUTPUT
+              echo "stack_id=${{ secrets.PROD_STACK_ID }}" >> $GITHUB_OUTPUT
+              echo "portainer_host=${{ secrets.PROD_PORTAINER_HOST }}" >> $GITHUB_OUTPUT
+              echo "portainer_api_key=${{ secrets.PROD_PORTAINER_API_KEY }}" >> $GITHUB_OUTPUT
+              echo "portainer_endpoint_id=${{ secrets.PROD_PORTAINER_ENDPOINT_ID }}" >> $GITHUB_OUTPUT
+            fi
+          # Pull Request (автоматический)
+          else
+            echo "skip_build=false" >> $GITHUB_OUTPUT
+            SHORT_SHA=$(echo "${{ github.event.pull_request.head.sha }}" | cut -c1-7)
+            IMAGE_TAG="${{ github.base_ref }}-${SHORT_SHA}"
+            echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+            echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+            
+            if [ "${{ github.base_ref }}" == "dev" ]; then
+              echo "environment=staging" >> $GITHUB_OUTPUT
+              echo "env_type=staging" >> $GITHUB_OUTPUT
+              echo "compose_file=docker-compose.dev.yml" >> $GITHUB_OUTPUT
+              echo "stack_name=${{ secrets.DEV_STACK_NAME }}" >> $GITHUB_OUTPUT
+              echo "stack_id=${{ secrets.DEV_STACK_ID }}" >> $GITHUB_OUTPUT
+              echo "portainer_host=${{ secrets.DEV_PORTAINER_HOST }}" >> $GITHUB_OUTPUT
+              echo "portainer_api_key=${{ secrets.DEV_PORTAINER_API_KEY }}" >> $GITHUB_OUTPUT
+              echo "portainer_endpoint_id=${{ secrets.DEV_PORTAINER_ENDPOINT_ID }}" >> $GITHUB_OUTPUT
+            elif [ "${{ github.base_ref }}" == "main" ]; then
+              echo "environment=production" >> $GITHUB_OUTPUT
+              echo "env_type=production" >> $GITHUB_OUTPUT
+              echo "compose_file=docker-compose.prod.yml" >> $GITHUB_OUTPUT
+              echo "stack_name=${{ secrets.PROD_STACK_NAME }}" >> $GITHUB_OUTPUT
+              echo "stack_id=${{ secrets.PROD_STACK_ID }}" >> $GITHUB_OUTPUT
+              echo "portainer_host=${{ secrets.PROD_PORTAINER_HOST }}" >> $GITHUB_OUTPUT
+              echo "portainer_api_key=${{ secrets.PROD_PORTAINER_API_KEY }}" >> $GITHUB_OUTPUT
+              echo "portainer_endpoint_id=${{ secrets.PROD_PORTAINER_ENDPOINT_ID }}" >> $GITHUB_OUTPUT
+            else
+              echo "❌ Неподдерживаемая ветка: ${{ github.base_ref }}"
+              exit 1
+            fi
+          fi
+          
+          echo "✅ Окружение определено: $(cat $GITHUB_OUTPUT | grep environment=)"
+
+  # Job 2: Сборка образа (пропускается если skip_build=true)
+  build:
+    needs: setup
+    if: needs.setup.outputs.skip_build != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Получение кода
+        uses: actions/checkout@v4
+
+      - name: Настройка Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Вход в GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Сборка и отправка образа
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.setup.outputs.image_tag }}
+            ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.setup.outputs.environment }}-latest
+          build-args: |
+            ENV_TYPE=${{ needs.setup.outputs.env_type }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Вывод информации об образе
+        run: |
+          echo "✅ Образ собран и отправлен:"
+          echo "📦 ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.setup.outputs.image_tag }}"
+
+  # Job 3: Деплой в Portainer (зависит от setup, ждёт build если он был)
+  deploy:
+    needs: [setup, build]
+    if: always() && needs.setup.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Получение кода (для docker-compose файлов)
+        uses: actions/checkout@v4
+
+      - name: Развертывание в Portainer
+        uses: xjl0/deploy-to-portainer-action@v1
+        with:
+          portainer-host: ${{ needs.setup.outputs.portainer_host }}
+          api-key: ${{ needs.setup.outputs.portainer_api_key }}
+          endpoint-id: ${{ needs.setup.outputs.portainer_endpoint_id }}
+          stack-name: ${{ needs.setup.outputs.stack_name }}
+          stack-id: ${{ needs.setup.outputs.stack_id }}
+          stack-definition: ${{ needs.setup.outputs.compose_file }}
+          image: ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.setup.outputs.image_tag }}
+          pullImage: true
+          prune: true
+
+      - name: Вывод результата
+        run: |
+          echo "✅ Деплой завершён успешно!"
+          echo "🌍 Окружение: ${{ needs.setup.outputs.environment }}"
+          echo "📦 Образ: ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.setup.outputs.image_tag }}"
+
+  # Job 4: Комментарий в PR (только для PR, зависит от deploy)
+  comment:
+    needs: [setup, deploy]
+    if: github.event_name == 'pull_request' && always() && needs.setup.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Комментарий об успехе
+        if: needs.deploy.result == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `### ✅ Развертывание успешно завершено
+            
+            **Окружение:** \`${{ needs.setup.outputs.environment }}\`
+            **ENV_TYPE:** \`${{ needs.setup.outputs.env_type }}\`
+            **Образ:** \`${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.setup.outputs.image_tag }}\`
+            **Стек:** \`${{ needs.setup.outputs.stack_name || needs.setup.outputs.stack_id }}\`
+            **Commit:** \`${{ needs.setup.outputs.short_sha }}\`
+            
+            Приложение развернуто и доступно в Portainer.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+      - name: Комментарий об ошибке
+        if: needs.deploy.result == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `### ⛔️ Ошибка развертывания
+            
+            **Окружение:** \`${{ needs.setup.outputs.environment }}\`
+            **ENV_TYPE:** \`${{ needs.setup.outputs.env_type }}\`
+            **Commit:** \`${{ needs.setup.outputs.short_sha }}\`
+            
+            Проверьте логи workflow для деталей.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
