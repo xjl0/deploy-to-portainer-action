@@ -40118,6 +40118,11 @@ var PortainerApi = class {
     const { data } = await this.axiosInstance.get(url2);
     return data;
   }
+  async getStackFile(id) {
+    const url2 = `/stacks/${id}/file`;
+    const { data } = await this.axiosInstance.get(url2);
+    return data.StackFileContent ?? data.stackFileContent ?? "";
+  }
   async updateStack(id, params, body) {
     await this.axiosInstance.put(`/stacks/${id}`, body, { params });
   }
@@ -40127,21 +40132,7 @@ var PortainerApi = class {
 var import_path = __toESM(require("path"));
 var import_fs2 = __toESM(require("fs"));
 var import_handlebars = __toESM(require_lib());
-function generateNewStackDefinition(stackDefinitionFile, templateVariables, image) {
-  const stackDefFilePath = import_path.default.join(process.env.GITHUB_WORKSPACE, stackDefinitionFile);
-  info(`\u0427\u0442\u0435\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u0430 \u0441\u0442\u0435\u043A\u0430 \u0438\u0437 ${stackDefFilePath}`);
-  let stackDefinition = import_fs2.default.readFileSync(stackDefFilePath, "utf8");
-  if (!stackDefinition) {
-    throw new Error(`\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043D\u0430\u0439\u0442\u0438 \u0444\u0430\u0439\u043B \u0441\u0442\u0435\u043A\u0430: ${stackDefFilePath}`);
-  }
-  if (templateVariables) {
-    info(`\u041F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u043F\u0435\u0440\u0435\u043C\u0435\u043D\u043D\u044B\u0445 \u0448\u0430\u0431\u043B\u043E\u043D\u0430 \u0434\u043B\u044F \u043A\u043B\u044E\u0447\u0435\u0439: ${Object.keys(templateVariables)}`);
-    stackDefinition = import_handlebars.default.compile(stackDefinition)(templateVariables);
-  }
-  if (!image) {
-    info(`\u041D\u043E\u0432\u044B\u0439 \u043E\u0431\u0440\u0430\u0437 \u043D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D. \u0411\u0443\u0434\u0435\u0442 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D \u043E\u0431\u0440\u0430\u0437 \u0438\u0437 \u0444\u0430\u0439\u043B\u0430 \u0441\u0442\u0435\u043A\u0430.`);
-    return stackDefinition;
-  }
+function applyImageReplacement(stackDefinition, image) {
   const imageWithoutTag = image.substring(0, image.indexOf(":"));
   info(`\u0412\u0441\u0442\u0430\u0432\u043A\u0430 \u043E\u0431\u0440\u0430\u0437\u0430 ${image} \u0432 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u0435 \u0441\u0442\u0435\u043A\u0430`);
   const escapedImageWithoutTag = imageWithoutTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -40153,25 +40144,37 @@ function generateNewStackDefinition(stackDefinitionFile, templateVariables, imag
     return `${prefix}${image}${suffix}`;
   });
 }
+function prepareStackDefinition(stackContent, templateVariables, image) {
+  let result = stackContent;
+  if (templateVariables) {
+    info(`\u041F\u0440\u0438\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u043F\u0435\u0440\u0435\u043C\u0435\u043D\u043D\u044B\u0445 \u0448\u0430\u0431\u043B\u043E\u043D\u0430 \u0434\u043B\u044F \u043A\u043B\u044E\u0447\u0435\u0439: ${Object.keys(templateVariables)}`);
+    result = import_handlebars.default.compile(result)(templateVariables);
+  }
+  if (!image) {
+    info(`\u041D\u043E\u0432\u044B\u0439 \u043E\u0431\u0440\u0430\u0437 \u043D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D. \u0411\u0443\u0434\u0435\u0442 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u043D \u043E\u0431\u0440\u0430\u0437 \u0438\u0437 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F \u0441\u0442\u0435\u043A\u0430.`);
+    return result;
+  }
+  return applyImageReplacement(result, image);
+}
 async function deployStack({
   portainerHost,
   apiKey,
   endpointId,
   stackName,
   stackId,
+  useExistingStack,
   stackDefinitionFile,
   templateVariables,
   image,
   prune,
   pullImage
 }) {
+  if (!useExistingStack && (!stackDefinitionFile || !stackDefinitionFile.trim())) {
+    throw new Error(
+      "\u041F\u0440\u0438 use-existing-stack=false \u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E \u0443\u043A\u0430\u0437\u0430\u0442\u044C stack-definition (\u043F\u0443\u0442\u044C \u043A docker-compose \u0444\u0430\u0439\u043B\u0443)"
+    );
+  }
   const portainerApi = new PortainerApi(portainerHost, apiKey);
-  const stackDefinitionToDeploy = generateNewStackDefinition(
-    stackDefinitionFile,
-    templateVariables,
-    image
-  );
-  debug(stackDefinitionToDeploy);
   try {
     let existingStack;
     if (stackId) {
@@ -40256,9 +40259,28 @@ async function deployStack({
     } else {
       throw new Error("\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D \u043D\u0438 stack-name, \u043D\u0438 stack-id");
     }
+    let stackDefinitionToDeploy;
+    if (useExistingStack) {
+      info(`\u041F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u0435 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F \u0441\u0442\u0435\u043A\u0430 \u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 (ID: ${existingStack.Id})`);
+      const stackFileContent = await portainerApi.getStackFile(existingStack.Id);
+      if (!stackFileContent || !stackFileContent.trim()) {
+        throw new Error("\u0421\u0442\u0435\u043A \u043D\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0435 \u043D\u0435 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F (\u043F\u0443\u0441\u0442\u043E\u0439 StackFileContent)");
+      }
+      stackDefinitionToDeploy = prepareStackDefinition(stackFileContent, void 0, image);
+    } else {
+      const stackDefFilePath = import_path.default.join(process.env.GITHUB_WORKSPACE, stackDefinitionFile);
+      info(`\u0427\u0442\u0435\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u0430 \u0441\u0442\u0435\u043A\u0430 \u0438\u0437 ${stackDefFilePath}`);
+      const fileContent = import_fs2.default.readFileSync(stackDefFilePath, "utf8");
+      if (!fileContent) {
+        throw new Error(`\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043D\u0430\u0439\u0442\u0438 \u0444\u0430\u0439\u043B \u0441\u0442\u0435\u043A\u0430: ${stackDefFilePath}`);
+      }
+      stackDefinitionToDeploy = prepareStackDefinition(fileContent, templateVariables, image);
+    }
+    debug(stackDefinitionToDeploy);
     info(
       `\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0441\u0442\u0435\u043A\u0430... Id: ${existingStack.Id} EndpointId: ${existingStack.EndpointId}`
     );
+    info(`\u041F\u0435\u0440\u0435\u043C\u0435\u043D\u043D\u044B\u0435 \u043E\u043A\u0440\u0443\u0436\u0435\u043D\u0438\u044F: \u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 (${existingStack.Env?.length ?? 0} \u0448\u0442.)`);
     info(`\u041F\u0430\u0440\u0430\u043C\u0435\u0442\u0440\u044B \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: prune=${prune || false}, pullImage=${pullImage || false}`);
     await portainerApi.updateStack(
       existingStack.Id,
@@ -40266,7 +40288,7 @@ async function deployStack({
         endpointId: existingStack.EndpointId
       },
       {
-        env: existingStack.Env,
+        env: existingStack.Env ?? [],
         stackFileContent: stackDefinitionToDeploy,
         prune: prune || false,
         pullImage: pullImage || false
@@ -40303,8 +40325,11 @@ async function run() {
     if (!hasStackName && !hasStackId) {
       throw new Error("\u041D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u043E \u0443\u043A\u0430\u0437\u0430\u0442\u044C stack-name \u0438\u043B\u0438 stack-id");
     }
+    const useExistingStack = getBooleanInput("use-existing-stack", {
+      required: false
+    });
     const stackDefinitionFile = getInput("stack-definition", {
-      required: true
+      required: false
     });
     const templateVariables = getInput("template-variables", {
       required: false
@@ -40324,6 +40349,7 @@ async function run() {
       endpointId: parseInt(endpointId) || 1,
       stackName,
       stackId,
+      useExistingStack,
       stackDefinitionFile,
       templateVariables: templateVariables ? JSON.parse(templateVariables) : void 0,
       image,

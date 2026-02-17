@@ -55,6 +55,28 @@ GitHub Action для автоматического развертывания D
 > 
 > В них разные настройки: порты, переменные окружения, image теги и т.д.
 
+### Использование стека с сервера (use-existing-stack)
+
+Если стек уже развёрнут в Portainer и вы хотите обновлять только образ, не храня compose-файл в репозитории:
+
+```yaml
+- name: Развертывание в Portainer (из существующего стека)
+  uses: xjl0/deploy-to-portainer-action@v1
+  with:
+    portainer-host: ${{ secrets.PORTAINER_HOST }}
+    api-key: ${{ secrets.PORTAINER_API_KEY }}
+    endpoint-id: ${{ secrets.ENDPOINT_ID }}
+    stack-id: 200
+    use-existing-stack: true
+    image: 'ghcr.io/username/repo:v2'
+```
+
+При `use-existing-stack: true`:
+- Определение стека (compose) берётся с сервера
+- Переменные окружения берутся с сервера
+- `stack-definition` не нужен
+- Применяется только замена образа (если указан `image`)
+
 ### Автодеплой с Pull Requests
 
 Есть **два варианта** workflow:
@@ -225,11 +247,12 @@ jobs:
 | `endpoint-id` | Да | ID endpoint | - |
 | `stack-name` | Нет* | Имя стека (должен существовать) | - |
 | `stack-id` | Нет* | ID стека (быстрее чем по имени) | - |
-| `stack-definition` | Да | Путь к docker-compose.yml | - |
-| `template-variables` | Нет | JSON переменные для Handlebars | - |
+| `use-existing-stack` | Нет | Брать compose и env с сервера | `false` |
+| `stack-definition` | Да* | Путь к docker-compose.yml (не нужен при use-existing-stack=true) | - |
+| `template-variables` | Нет | JSON переменные для Handlebars (только при stack из файла) | - |
 | `image` | Нет | URI образа для обновления | - |
 | `prune` | Нет | Удалить отсутствующие сервисы | `false` |
-| `pullImage` | Нет | Принудительно скачать образ | `true` |
+| `pullImage` | Нет | Принудительно скачать образ | `false` |
 
 **\* Примечание:** Требуется указать **либо** `stack-name`, **либо** `stack-id`. Если указан `stack-id`, он имеет приоритет и работает быстрее (один API запрос вместо двух).
 
@@ -297,7 +320,7 @@ PROD_STACK_NAME = my-awesome-app-prod
 **Dockerfile** (принимает ENV_TYPE):
 
 ```dockerfile
-FROM node:20-alpine
+FROM node:24-alpine
 ARG ENV_TYPE=production
 ENV NODE_ENV=${ENV_TYPE}
 

@@ -10,52 +10,47 @@ type DeployStack = {
   endpointId: number
   stackName?: string
   stackId?: number
-  stackDefinitionFile: string
+  useExistingStack?: boolean
+  stackDefinitionFile?: string
   templateVariables?: object
   image?: string
   prune?: boolean
   pullImage?: boolean
 }
 
-function generateNewStackDefinition(
-  stackDefinitionFile: string,
-  templateVariables?: object,
-  image?: string
-): string {
-  const stackDefFilePath = path.join(process.env.GITHUB_WORKSPACE as string, stackDefinitionFile)
-  core.info(`Чтение файла стека из ${stackDefFilePath}`)
-  let stackDefinition = fs.readFileSync(stackDefFilePath, 'utf8')
-  if (!stackDefinition) {
-    throw new Error(`Не удалось найти файл стека: ${stackDefFilePath}`)
-  }
-
-  if (templateVariables) {
-    core.info(`Применение переменных шаблона для ключей: ${Object.keys(templateVariables)}`)
-    stackDefinition = Handlebars.compile(stackDefinition)(templateVariables)
-  }
-
-  if (!image) {
-    core.info(`Новый образ не указан. Будет использован образ из файла стека.`)
-    return stackDefinition
-  }
-
+function applyImageReplacement(stackDefinition: string, image: string): string {
   const imageWithoutTag = image.substring(0, image.indexOf(':'))
   core.info(`Вставка образа ${image} в определение стека`)
-  
-  // Экранируем специальные символы regex в имени образа
+
   const escapedImageWithoutTag = imageWithoutTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  
-  // Поддерживаем оба формата: с кавычками и без
-  // Формат 1: image: "repo:tag" или image: 'repo:tag'
-  // Формат 2: image: repo:tag
   const imageRegex = new RegExp(
     `(image:\\s*["']?)${escapedImageWithoutTag}(?::[^"'\\s\\n]*)?(["']?)`,
     'g'
   )
-  
+
   return stackDefinition.replace(imageRegex, (match, prefix, suffix) => {
     return `${prefix}${image}${suffix}`
   })
+}
+
+function prepareStackDefinition(
+  stackContent: string,
+  templateVariables?: object,
+  image?: string
+): string {
+  let result = stackContent
+
+  if (templateVariables) {
+    core.info(`Применение переменных шаблона для ключей: ${Object.keys(templateVariables)}`)
+    result = Handlebars.compile(result)(templateVariables)
+  }
+
+  if (!image) {
+    core.info(`Новый образ не указан. Будет использован образ из определения стека.`)
+    return result
+  }
+
+  return applyImageReplacement(result, image)
 }
 
 export async function deployStack({
@@ -64,20 +59,20 @@ export async function deployStack({
   endpointId,
   stackName,
   stackId,
+  useExistingStack,
   stackDefinitionFile,
   templateVariables,
   image,
   prune,
   pullImage
 }: DeployStack): Promise<void> {
-  const portainerApi = new PortainerApi(portainerHost, apiKey)
+  if (!useExistingStack && (!stackDefinitionFile || !stackDefinitionFile.trim())) {
+    throw new Error(
+      'При use-existing-stack=false необходимо указать stack-definition (путь к docker-compose файлу)'
+    )
+  }
 
-  const stackDefinitionToDeploy = generateNewStackDefinition(
-    stackDefinitionFile,
-    templateVariables,
-    image
-  )
-  core.debug(stackDefinitionToDeploy)
+  const portainerApi = new PortainerApi(portainerHost, apiKey)
 
   try {
     let existingStack
@@ -178,9 +173,30 @@ export async function deployStack({
       throw new Error('Не указан ни stack-name, ни stack-id')
     }
 
+    let stackDefinitionToDeploy: string
+    if (useExistingStack) {
+      core.info(`Получение определения стека с сервера (ID: ${existingStack.Id})`)
+      const stackFileContent = await portainerApi.getStackFile(existingStack.Id)
+      if (!stackFileContent || !stackFileContent.trim()) {
+        throw new Error('Стек на сервере не содержит определения (пустой StackFileContent)')
+      }
+      stackDefinitionToDeploy = prepareStackDefinition(stackFileContent, undefined, image)
+    } else {
+      const stackDefFilePath = path.join(process.env.GITHUB_WORKSPACE as string, stackDefinitionFile!)
+      core.info(`Чтение файла стека из ${stackDefFilePath}`)
+      const fileContent = fs.readFileSync(stackDefFilePath, 'utf8')
+      if (!fileContent) {
+        throw new Error(`Не удалось найти файл стека: ${stackDefFilePath}`)
+      }
+      stackDefinitionToDeploy = prepareStackDefinition(fileContent, templateVariables, image)
+    }
+
+    core.debug(stackDefinitionToDeploy)
+
     core.info(
       `Обновление стека... Id: ${existingStack.Id} EndpointId: ${existingStack.EndpointId}`
     )
+    core.info(`Переменные окружения: с сервера (${existingStack.Env?.length ?? 0} шт.)`)
     core.info(`Параметры обновления: prune=${prune || false}, pullImage=${pullImage || false}`)
     await portainerApi.updateStack(
       existingStack.Id,
@@ -188,7 +204,7 @@ export async function deployStack({
         endpointId: existingStack.EndpointId
       },
       {
-        env: existingStack.Env,
+        env: existingStack.Env ?? [],
         stackFileContent: stackDefinitionToDeploy,
         prune: prune || false,
         pullImage: pullImage || false

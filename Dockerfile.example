@@ -2,7 +2,7 @@
 # Показывает как использовать ENV_TYPE при сборке
 
 # Этап 1: Сборка
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 # Аргумент сборки (передается из GitHub Actions)
 ARG ENV_TYPE=production
@@ -36,7 +36,7 @@ RUN if [ "$ENV_TYPE" = "production" ]; then \
     fi
 
 # Этап 2: Production образ
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 
 # Аргумент снова нужен для финального образа
 ARG ENV_TYPE=production

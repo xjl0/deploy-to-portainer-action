@@ -29,8 +29,11 @@ export async function run(): Promise<void> {
       throw new Error('Необходимо указать stack-name или stack-id')
     }
     
+    const useExistingStack: boolean = core.getBooleanInput('use-existing-stack', {
+      required: false
+    })
     const stackDefinitionFile: string = core.getInput('stack-definition', {
-      required: true
+      required: false
     })
     const templateVariables: string = core.getInput('template-variables', {
       required: false
@@ -51,6 +54,7 @@ export async function run(): Promise<void> {
       endpointId: parseInt(endpointId) || 1,
       stackName,
       stackId,
+      useExistingStack,
       stackDefinitionFile,
       templateVariables: templateVariables ? JSON.parse(templateVariables) : undefined,
       image,

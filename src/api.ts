@@ -80,6 +80,12 @@ export class PortainerApi {
     return data
   }
 
+  async getStackFile(id: number): Promise<string> {
+    const url = `/stacks/${id}/file`
+    const { data } = await this.axiosInstance.get<{ StackFileContent?: string; stackFileContent?: string }>(url)
+    return data.StackFileContent ?? data.stackFileContent ?? ''
+  }
+
   async updateStack(id: number, params: UpdateStackParams, body: UpdateStackBody): Promise<void> {
     await this.axiosInstance.put(`/stacks/${id}`, body, { params })
   }

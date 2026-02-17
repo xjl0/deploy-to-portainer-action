@@ -21,9 +21,13 @@ inputs:
   stack-id:
     required: false
     description: 'ID стека в Portainer (если указан, используется вместо поиска по имени, быстрее)'
+  use-existing-stack:
+    required: false
+    default: "false"
+    description: 'Если true — брать определение стека и переменные окружения с сервера (уже развёрнутый стек). По умолчанию — из файла в репозитории'
   stack-definition:
-    required: true
-    description: 'Путь к docker-compose файлу, например docker-compose.prod.yml или docker-compose.master.yml'
+    required: false
+    description: 'Путь к docker-compose файлу (требуется если use-existing-stack=false), например docker-compose.prod.yml'
   template-variables:
     required: false
     description: 'JSON строка с переменными для замены в docker-compose файле через handlebars, например {"VERSION":"1.0.0"}'
@@ -36,7 +40,7 @@ inputs:
     description: 'Удалить сервисы, которые отсутствуют в новом docker-compose.yml (очистка удалённых сервисов)'
   pullImage:
     required: false
-    default: "true"
+    default: "false"
     description: 'Принудительно скачать последний образ, даже если тег не изменился'
 
 runs:

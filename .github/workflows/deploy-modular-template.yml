@@ -46,8 +46,9 @@ jobs:
       compose_file: ${{ steps.env.outputs.compose_file }}
       skip_build: ${{ steps.env.outputs.skip_build }}
       short_sha: ${{ steps.env.outputs.short_sha }}
-      # ВАЖНО: Секреты нельзя передавать через outputs! GitHub их блокирует.
-      # stack_name и stack_id тоже из secrets, передаём напрямую в deploy job
+      base_ref: ${{ steps.env.outputs.base_ref }}
+      # ВАЖНО: Секреты и значения похожие на SHA блокируются между jobs!
+      # Для PR image_tag вычисляется в build/deploy из base_ref + git rev-parse
 
     steps:
       - name: Определение окружения
@@ -67,6 +68,11 @@ jobs:
             SKIP_BUILD="${{ github.event.inputs.skip_build }}"
             IMAGE_TAG="${{ github.event.inputs.image_tag }}"
             
+            if [ -z "${IMAGE_TAG// }" ]; then
+              echo "❌ ОШИБКА: При ручном запуске укажите тег образа (image_tag), например: dev-abc1234"
+              exit 1
+            fi
+            
             echo "skip_build=${SKIP_BUILD}" >> $GITHUB_OUTPUT
             echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
             echo "short_sha=${IMAGE_TAG##*-}" >> $GITHUB_OUTPUT
@@ -81,12 +87,15 @@ jobs:
               echo "compose_file=docker-compose.prod.yml" >> $GITHUB_OUTPUT
             fi
           # Pull Request (автоматический)
+          # Не выводим image_tag/short_sha — GitHub маскирует SHA-подобные значения и блокирует их между jobs
           else
             echo "skip_build=false" >> $GITHUB_OUTPUT
-            SHORT_SHA=$(echo "${{ github.event.pull_request.head.sha }}" | cut -c1-7)
-            IMAGE_TAG="${{ github.base_ref }}-${SHORT_SHA}"
-            echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
-            echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+            BASE_REF="${{ github.base_ref }}"
+            if [ -z "$BASE_REF" ]; then
+              echo "❌ ОШИБКА: github.base_ref пустой. Запускайте workflow только для PR в dev/main."
+              exit 1
+            fi
+            echo "base_ref=${BASE_REF}" >> $GITHUB_OUTPUT
             
             if [ "${{ github.base_ref }}" == "dev" ]; then
               echo "environment=staging" >> $GITHUB_OUTPUT
@@ -126,6 +135,26 @@ jobs:
     steps:
       - name: Получение кода
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Определение тега образа
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            IMAGE_TAG="${{ needs.setup.outputs.image_tag }}"
+          else
+            BASE_REF="${{ needs.setup.outputs.base_ref }}"
+            SHORT_SHA=$(git rev-parse HEAD | cut -c1-7)
+            IMAGE_TAG="${BASE_REF}-${SHORT_SHA}"
+          fi
+          if [ -z "${IMAGE_TAG}" ]; then
+            echo "❌ ОШИБКА: image_tag пустой."
+            exit 1
+          fi
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "short_sha=${IMAGE_TAG##*-}" >> $GITHUB_OUTPUT
+          echo "✅ Тег образа: ${IMAGE_TAG}"
 
       - name: Настройка Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -143,7 +172,7 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.setup.outputs.image_tag }}
+            ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ steps.tag.outputs.image_tag }}
             ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.setup.outputs.environment }}-latest
           build-args: |
             ENV_TYPE=${{ needs.setup.outputs.env_type }}
@@ -153,13 +182,16 @@ jobs:
       - name: Вывод информации об образе
         run: |
           echo "✅ Образ собран и отправлен:"
-          echo "📦 ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.setup.outputs.image_tag }}"
+          echo "📦 ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ steps.tag.outputs.image_tag }}"
 
   # Job 3: Деплой в Portainer (зависит от setup, ждёт build если он был)
   deploy:
     needs: [setup, build]
     if: always() && needs.setup.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.imagetag.outputs.image_tag }}
+      short_sha: ${{ steps.imagetag.outputs.short_sha }}
 
     steps:
       - name: Определение секретов по окружению
@@ -186,6 +218,22 @@ jobs:
 
       - name: Получение кода (для docker-compose файлов)
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Определение тега образа
+        id: imagetag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            IMAGE_TAG="${{ needs.setup.outputs.image_tag }}"
+          else
+            BASE_REF="${{ needs.setup.outputs.base_ref }}"
+            SHORT_SHA=$(git rev-parse HEAD | cut -c1-7)
+            IMAGE_TAG="${BASE_REF}-${SHORT_SHA}"
+          fi
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "short_sha=${IMAGE_TAG##*-}" >> $GITHUB_OUTPUT
+          echo "✅ Тег образа для деплоя: ${IMAGE_TAG}"
 
       - name: Развертывание в Portainer
         uses: xjl0/deploy-to-portainer-action@v1
@@ -196,15 +244,15 @@ jobs:
           stack-name: ${{ steps.secrets.outputs.stack_name }}
           stack-id: ${{ steps.secrets.outputs.stack_id }}
           stack-definition: ${{ needs.setup.outputs.compose_file }}
-          image: ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.setup.outputs.image_tag }}
-          pullImage: true
-          prune: true
+          image: ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ steps.imagetag.outputs.image_tag }}
+          pullImage: false
+          prune: false
 
       - name: Вывод результата
         run: |
           echo "✅ Деплой завершён успешно!"
           echo "🌍 Окружение: ${{ needs.setup.outputs.environment }}"
-          echo "📦 Образ: ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.setup.outputs.image_tag }}"
+          echo "📦 Образ: ${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ steps.imagetag.outputs.image_tag }}"
 
   # Job 4: Комментарий в PR (только для PR, зависит от deploy)
   comment:
@@ -224,8 +272,8 @@ jobs:
             
             **Окружение:** \`${{ needs.setup.outputs.environment }}\`
             **ENV_TYPE:** \`${{ needs.setup.outputs.env_type }}\`
-            **Образ:** \`${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.setup.outputs.image_tag }}\`
-            **Commit:** \`${{ needs.setup.outputs.short_sha }}\`
+            **Образ:** \`${{ env.REGISTRY }}/${{ needs.setup.outputs.image_name }}:${{ needs.deploy.outputs.image_tag }}\`
+            **Commit:** \`${{ needs.deploy.outputs.short_sha }}\`
             
             Приложение развернуто и доступно в Portainer.`;
             
@@ -245,7 +293,7 @@ jobs:
             
             **Окружение:** \`${{ needs.setup.outputs.environment }}\`
             **ENV_TYPE:** \`${{ needs.setup.outputs.env_type }}\`
-            **Commit:** \`${{ needs.setup.outputs.short_sha }}\`
+            **Commit:** \`${{ needs.deploy.outputs.short_sha }}\`
             
             Проверьте логи workflow для деталей.`;
             
